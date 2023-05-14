@@ -7,6 +7,7 @@ import sys
 import json
 import numpy as np
 import pandas as pd
+import math
 
 from typing import List
 
@@ -179,6 +180,28 @@ def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, test
 
     return [1]*len(testing_data)
 
+
+######################## calculate the impurity ################################
+def calculate_entropy_impurity(p):
+    return -p*math.log(p,2) - (1-p)*math.log(1-p,2)
+
+# Calculating p. to be used for calculating impurity
+def calculate_p_dot(labels):
+    p, n = 0
+    for i in labels:
+        if i == 1:
+            p += 1
+        else:
+            n += 1
+    return (p)/(p+n)
+
+def calculate_impurity(data: pd.DataFrame, labels: pd.Series):
+    data_labels = data.columns.values
+    p_dot = calculate_p_dot(labels)
+    # for i in range(len(data_labels)):
+    #     for j in range(len(labels)):
+    # pass 
+
 ######################## evaluate the accuracy #################################
 
 def cal_accuracy(y_pred, y_real):
@@ -201,11 +224,9 @@ if __name__ == "__main__":
     training = pd.read_csv('data/train.csv')
     dev = pd.read_csv('data/dev.csv')
 
-    print(training)
     training_labels = training['LABEL']
     training_data = training.drop('LABEL', axis=1)
     dev_data = dev.drop('LABEL', axis=1)
-
     prediction = run_train_test(training_data, training_labels, dev_data)
     accu = cal_accuracy(prediction, dev['LABEL'].to_numpy())
     print(accu)
