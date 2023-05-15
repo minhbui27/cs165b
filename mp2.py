@@ -185,23 +185,42 @@ def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, test
 def calculate_entropy_impurity(p):
     return -p*math.log(p,2) - (1-p)*math.log(1-p,2)
 
-# Calculating p. to be used for calculating impurity
-def calculate_p_dot(labels):
-    p, n = 0
-    for i in labels:
-        if i == 1:
-            p += 1
-        else:
-            n += 1
-    return (p)/(p+n)
+def calculate_avg_age(age_array):
+    temp = 0
+    for i in age_array:
+        temp += i
+    return temp/len(age_array)
 
+# Returns a dictionary of p_dot values for each feature
 def calculate_impurity(data: pd.DataFrame, labels: pd.Series):
     data_labels = data.columns.values
-    p_dot = calculate_p_dot(labels)
-    # for i in range(len(data_labels)):
-    #     for j in range(len(labels)):
-    # pass 
+    # creating a dictionary to each each unique values within each features for counting positives and negatives
+    distinct_features = {}
+    for i in data_labels:
+        distinct_features[i] = data[i].unique()
 
+    # creating a copy to store the p_dot values. distinct_features -> unique values per feature, distinct_features_count -> pdot for corresponding value in distinct_features
+    # need to perform shallow copy because python n stuff
+    distinct_features_count = distinct_features.copy()
+    # calculating the p_dot values for each of the features provided in the function params
+    for feature in distinct_features:
+        # print(feature)
+        # creating temp array for each feature distinct value arrays
+        p_dot_arr = [0] * len(distinct_features[feature])
+        for j in range(len(distinct_features[feature])):
+            positives = 0
+            negatives = 0
+            for k in range(len(data[feature])):
+                # print(f"data feature: {data[feature][k]} feature value: {distinct_features[feature][j]} label: {labels[k]}")
+                if(data[feature][k] == distinct_features[feature][j] and labels[k] == 1):
+                    positives += 1
+                elif(data[feature][k] == distinct_features[feature][j] and labels[k] == 2):
+                    negatives += 1
+            p_dot_arr[j] = positives/(positives+negatives)
+        distinct_features_count[feature] = p_dot_arr
+
+    print(distinct_features)
+    print(distinct_features_count)
 ######################## evaluate the accuracy #################################
 
 def cal_accuracy(y_pred, y_real):
@@ -227,6 +246,23 @@ if __name__ == "__main__":
     training_labels = training['LABEL']
     training_data = training.drop('LABEL', axis=1)
     dev_data = dev.drop('LABEL', axis=1)
+    column_labels = training_data.columns.values
+
+    ######## Relabelling ages below the average age to 1, otherwise 2 ######## 
+    avg_age = calculate_avg_age(training_data['AGE'])
+    print(avg_age)
+    ages = [0] * len(training_data['AGE'])
+    for i in range(len(training_data['AGE'])):
+        if training_data['AGE'][i] < avg_age:
+            ages[i] = 1
+        else: 
+            ages[i] = 2
+    training_data['AGE'] = ages
+
+    calculate_impurity(training_data, training_labels)
+
+
+    ######## Getting the prediction and calculating accuracy ########
     prediction = run_train_test(training_data, training_labels, dev_data)
     accu = cal_accuracy(prediction, dev['LABEL'].to_numpy())
     print(accu)
