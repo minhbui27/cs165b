@@ -244,6 +244,7 @@ def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, test
     #TODO implement the decision tree and return the prediction
     tree = DecisionTree(2,100,1e-10)
     tree.fit(training_data,training_labels)
+    tree.print_tree()
     return tree.predict(testing_data)
 
 
