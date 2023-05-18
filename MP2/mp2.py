@@ -100,7 +100,8 @@ class DecisionTree():
                 node.split_feature = split_feature
                 node.split_value = split_value
                 counter += 1
-
+                
+                # getting the left and right datas to pass into GrowTree for left and right nodes
                 left_data = data[data[split_feature] < split_value].drop(split_feature,axis = 1)
                 right_data = data[data[split_feature] >= split_value].drop(split_feature,axis = 1)
                 left_label = label[data[split_feature] < split_value]
@@ -110,12 +111,22 @@ class DecisionTree():
 
             else:
                 # TODO: If it doesn't match IG condition, it is a leaf node
+                # Getting the count of 2's and 1's in the label and returning the majority
                 node.is_leaf = True
-                node.prediction = label.mode()[0]
+                _, counts = np.unique(label, return_counts=True)
+                if(len(counts) == 0):
+                    node.prediction = 1
+                else:
+                    node.prediction = 2 if counts[1] > counts[0] else 1
         else:
             #TODO If it doesn't match depth or sample condition. It is a leaf node
+            # Getting the count of 2's and 1's in the label and returning the majority
             node.is_leaf = True
-            node.prediction = label.mode()[0]
+            _, counts = np.unique(label, return_counts=True)
+            if(len(counts) == 0):
+                node.prediction = 1
+            else:
+                node.prediction = 2 if counts[1] > counts[0] else 1
 
         return node
     
@@ -129,12 +140,17 @@ class DecisionTree():
         positives = counts[0] 
         negatives = counts[1] 
         p = positives/(positives+negatives)
-        return self.calculate_entropy_impurity(p)
+        return self.calculate_gini_impurity(p)
 
     def calculate_entropy_impurity(self, p):
         if(p == 0 or p == 1):
             return 0
         return -p*math.log(p,2) - (1-p)*math.log(1-p,2)
+    
+    def calculate_gini_impurity(self, p):
+        if(p == 0 or p == 1):
+            return 0
+        return 2*p*(1-p)
 
     def BestSplit(self, data: pd.DataFrame, label: pd.Series):
         '''
@@ -152,8 +168,9 @@ class DecisionTree():
         # calculating the split value
         init_entropy = self.calculate_entropy(label)
         for feature in data:
-            for value in data[feature].unique():
-                
+            unique_values = data[feature].unique()
+            for i in range(1,len(unique_values)):
+                value = (unique_values[i] + unique_values[i-1])/2
                 left = label[data[feature] < value]
                 right = label[data[feature] >= value]
 
@@ -211,9 +228,6 @@ class DecisionTree():
                 self.print_tree_rec(node.left)
                 self.print_tree_rec(node.right)
 
-
-
-
 def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, testing_data: pd.DataFrame) -> List[int]:
     """
     Implement the training and testing procedure here. You are permitted
@@ -228,7 +242,7 @@ def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, test
     """
 
     #TODO implement the decision tree and return the prediction
-    tree = DecisionTree(3,100)
+    tree = DecisionTree(2,100,1e-10)
     tree.fit(training_data,training_labels)
     return tree.predict(testing_data)
 
@@ -260,8 +274,20 @@ if __name__ == "__main__":
     training_data = training.drop('LABEL', axis=1)
     dev_data = dev.drop('LABEL', axis=1)
 
+    ######## Printing all features in the data to test which feature to clean ########
+    # for feature in training_data:
+    #     print(feature)
+    ######## Doing some cleaning to the data set ########
+    feature = 'INTUBED'
+    q_low = training_data[feature].quantile(0.01)
+    q_hi  = training_data[feature].quantile(0.99)
 
+    df_filtered = training_data[(training_data[feature] < q_hi) & (training_data[feature] > q_low)]
+    clean_idx = training_data.index[(training_data[feature] < q_hi) & (training_data[feature] > q_low)].tolist()
+    clean_labels = training_labels[clean_idx].reset_index().drop('index',axis = 1)
+    clean_training_set = training_data.loc[clean_idx].reset_index().drop('index',axis = 1)
+    # print(clean_training_set)
     ######## Getting the prediction and calculating accuracy ########
-    prediction = run_train_test(training_data, training_labels, dev_data)
+    prediction = run_train_test(clean_training_set, clean_labels, dev_data)
     accu = cal_accuracy(prediction, dev['LABEL'].to_numpy())
     print(accu)
