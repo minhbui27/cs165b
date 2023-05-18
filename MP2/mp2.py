@@ -22,6 +22,8 @@ class Node:
         self.prediction = None      # for leaf node, the class label, a int
         self.ig = None              # information gain for current split, a float
         self.depth = None           # depth of the node in the tree, root will be 0, a int
+    def __str__(self):
+        print("is_leaf: " + self.is_leaf)
 
 class DecisionTree():
     """Decision Tree Classifier."""
@@ -99,19 +101,41 @@ class DecisionTree():
                 node.split_value = split_value
                 counter += 1
 
-                #TODO Get the divided data and label based on the split feature and value, 
-                # and then recursively call GrowTree() to create left and right subtree.
-                pass
+                left_data = data[data[split_feature] < split_value].drop(split_feature,axis = 1)
+                right_data = data[data[split_feature] >= split_value].drop(split_feature,axis = 1)
+                left_label = label[data[split_feature] < split_value]
+                right_label = label[data[split_feature] >= split_value]
+                node.left = self.GrowTree(left_data,left_label,counter)
+                node.right = self.GrowTree(right_data,right_label,counter)
 
             else:
                 # TODO: If it doesn't match IG condition, it is a leaf node
-                pass
+                node.is_leaf = True
+                node.prediction = label.mode()[0]
         else:
             #TODO If it doesn't match depth or sample condition. It is a leaf node
-            pass
+            node.is_leaf = True
+            node.prediction = label.mode()[0]
 
         return node
     
+
+    ###################### getting the entropies ######################
+        
+    def calculate_entropy(self, data: pd.Series):
+        _, counts = np.unique(data, return_counts=True)
+        if(len(counts) <= 1):
+            return 1
+        positives = counts[0] 
+        negatives = counts[1] 
+        p = positives/(positives+negatives)
+        return self.calculate_entropy_impurity(p)
+
+    def calculate_entropy_impurity(self, p):
+        if(p == 0 or p == 1):
+            return 0
+        return -p*math.log(p,2) - (1-p)*math.log(1-p,2)
+
     def BestSplit(self, data: pd.DataFrame, label: pd.Series):
         '''
             Given a data, select the best split by maximizing the information gain (maximizing the purity)
@@ -124,7 +148,25 @@ class DecisionTree():
                 split_ig: information gain of the split.
         '''
         # TODO: Implement the BestSplit function
-        split_feature, split_value, split_ig = None, None, None
+        split_feature, split_value, split_ig = None, None, 0
+        # calculating the split value
+        init_entropy = self.calculate_entropy(label)
+        for feature in data:
+            for value in data[feature].unique():
+                
+                left = label[data[feature] < value]
+                right = label[data[feature] >= value]
+
+                left_entropy = self.calculate_entropy(left)
+                right_entropy = self.calculate_entropy(right)
+
+                ig = init_entropy - (left_entropy*len(left) + right_entropy*len(right))/len(label)
+
+                if(ig > split_ig):
+                    split_ig = ig
+                    split_feature = feature
+                    split_value = value
+
         return split_feature, split_value, split_ig
 
     def predict(self, data: pd.DataFrame) -> List[int]:
@@ -135,10 +177,19 @@ class DecisionTree():
             Returns:
                 predictions: List, predictions of the data.
         '''
-        predictions = []
+        predictions = [0] * len(data)
         # TODO: Implement the predict function
+        for idx, row in data.iterrows():
+            predictions[idx] = self.predict_recur(row, self.root)
         return predictions
     
+    def predict_recur(self, row: pd.Series, node: Node):
+        if(node.is_leaf):
+            return node.prediction
+        else:
+            next_node = node.left if row[node.split_feature] < node.split_value else node.right
+            return self.predict_recur(row, next_node)
+
     def print_tree(self):
         '''
             Prints the tree.
@@ -177,50 +228,12 @@ def run_train_test(training_data: pd.DataFrame, training_labels: pd.Series, test
     """
 
     #TODO implement the decision tree and return the prediction
+    tree = DecisionTree(3,100)
+    tree.fit(training_data,training_labels)
+    return tree.predict(testing_data)
 
-    return [1]*len(testing_data)
 
 
-######################## calculate the impurity ################################
-def calculate_entropy_impurity(p):
-    return -p*math.log(p,2) - (1-p)*math.log(1-p,2)
-
-def calculate_avg_age(age_array):
-    temp = 0
-    for i in age_array:
-        temp += i
-    return temp/len(age_array)
-
-# Returns a dictionary of p_dot values for each feature
-def calculate_impurity(data: pd.DataFrame, labels: pd.Series):
-    data_labels = data.columns.values
-    # creating a dictionary to each each unique values within each features for counting positives and negatives
-    distinct_features = {}
-    for i in data_labels:
-        distinct_features[i] = data[i].unique()
-
-    # creating a copy to store the p_dot values. distinct_features -> unique values per feature, distinct_features_count -> pdot for corresponding value in distinct_features
-    # need to perform shallow copy because python n stuff
-    distinct_features_count = distinct_features.copy()
-    # calculating the p_dot values for each of the features provided in the function params
-    for feature in distinct_features:
-        # print(feature)
-        # creating temp array for each feature distinct value arrays
-        p_dot_arr = [0] * len(distinct_features[feature])
-        for j in range(len(distinct_features[feature])):
-            positives = 0
-            negatives = 0
-            for k in range(len(data[feature])):
-                # print(f"data feature: {data[feature][k]} feature value: {distinct_features[feature][j]} label: {labels[k]}")
-                if(data[feature][k] == distinct_features[feature][j] and labels[k] == 1):
-                    positives += 1
-                elif(data[feature][k] == distinct_features[feature][j] and labels[k] == 2):
-                    negatives += 1
-            p_dot_arr[j] = positives/(positives+negatives)
-        distinct_features_count[feature] = p_dot_arr
-
-    print(distinct_features)
-    print(distinct_features_count)
 ######################## evaluate the accuracy #################################
 
 def cal_accuracy(y_pred, y_real):
@@ -246,20 +259,6 @@ if __name__ == "__main__":
     training_labels = training['LABEL']
     training_data = training.drop('LABEL', axis=1)
     dev_data = dev.drop('LABEL', axis=1)
-    column_labels = training_data.columns.values
-
-    ######## Relabelling ages below the average age to 1, otherwise 2 ######## 
-    avg_age = calculate_avg_age(training_data['AGE'])
-    print(avg_age)
-    ages = [0] * len(training_data['AGE'])
-    for i in range(len(training_data['AGE'])):
-        if training_data['AGE'][i] < avg_age:
-            ages[i] = 1
-        else: 
-            ages[i] = 2
-    training_data['AGE'] = ages
-
-    calculate_impurity(training_data, training_labels)
 
 
     ######## Getting the prediction and calculating accuracy ########
